@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoQuest – Geography Guessing Game</title>
+
+  <!-- Leaflet CSS (requires internet for map tiles anyway) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+/* =========================================
+   GeoQuest – Geography Guessing Game
+   ========================================= */
+
+:root {
+  --bg: #0f1923;
+  --surface: #1a2535;
+  --surface2: #253045;
+  --accent: #4e9af1;
+  --accent-hover: #3a80d8;
+  --success: #2ecc71;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --text: #e8edf5;
+  --text-muted: #8a9bb5;
+  --border: #2d3f5a;
+  --radius: 12px;
+  --hud-height: 64px;
+  --timer-height: 6px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ---- Screens ---- */
+.screen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+.screen.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#screen-game {
+  display: none;
+  flex-direction: column;
+}
+#screen-game.active {
+  display: flex;
+}
+
+/* ---- Title Screen ---- */
+.title-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 48px 56px;
+  max-width: 520px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+}
+
+.title-card h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin-bottom: 8px;
+}
+
+.title-card .subtitle {
+  font-size: 1.15rem;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.title-card .description {
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin-bottom: 28px;
+}
+
+.settings {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.settings select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.settings select:focus {
+  border-color: var(--accent);
+}
+
+/* ---- Buttons ---- */
+.btn {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: transform 0.1s, opacity 0.15s;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--accent-hover); }
+
+/* ---- HUD ---- */
+#hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--hud-height);
+  padding: 0 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.hud-left,
+.hud-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80px;
+}
+
+.hud-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+#hud-round,
+#hud-score {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ---- Prompt box ---- */
+#prompt-box {
+  background: var(--surface2);
+  border: 2px solid var(--accent);
+  border-radius: 30px;
+  padding: 8px 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.prompt-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+#prompt-city {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+
+/* ---- Timer bar ---- */
+#timer-container {
+  height: var(--timer-height);
+  background: var(--surface2);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+#timer-bar {
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  transition: width 0.1s linear, background 0.3s;
+  transform-origin: left;
+}
+
+#timer-bar.warning { background: var(--warning); }
+#timer-bar.danger  { background: var(--danger); }
+
+/* ---- Map ---- */
+#map {
+  flex: 1;
+  z-index: 1;
+  cursor: crosshair;
+}
+
+/* ---- Round result overlay ---- */
+#round-result {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  backdrop-filter: blur(4px);
+}
+
+#round-result.hidden {
+  display: none;
+}
+
+#result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 48px;
+  text-align: center;
+  min-width: 300px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  animation: pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+#result-icon {
+  font-size: 3rem;
+  margin-bottom: 8px;
+}
+
+#result-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+#result-distance {
+  color: var(--text-muted);
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+#result-points {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+/* ---- End Screen ---- */
+.end-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px 48px;
+  max-width: 640px;
+  width: 95%;
+  text-align: center;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+}
+
+.end-card h1 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+#end-trophy {
+  font-size: 4rem;
+  margin: 8px 0;
+}
+
+#end-score-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+#end-score {
+  font-size: 3rem;
+  font-weight: 900;
+  color: var(--accent);
+  line-height: 1;
+}
+
+#end-max-score {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+#end-grade {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+
+/* ---- Results table ---- */
+#results-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 28px;
+  font-size: 0.9rem;
+}
+
+#results-table th {
+  padding: 8px 12px;
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  border-bottom: 1px solid var(--border);
+}
+
+#results-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+#results-table tr:last-child td {
+  border-bottom: none;
+}
+
+.points-cell {
+  font-weight: 700;
+}
+.points-high  { color: var(--success); }
+.points-mid   { color: var(--warning); }
+.points-low   { color: var(--danger); }
+
+/* ---- Leaflet marker overrides ---- */
+.guess-marker {
+  background: var(--accent);
+  border: 3px solid #fff;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.target-marker {
+  background: var(--success);
+  border: 3px solid #fff;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.leaflet-popup-tip {
+  background: var(--surface2);
+}
+  </style>
+</head>
+<body>
+
+  <!-- ===== TITLE SCREEN ===== -->
+  <div id="screen-title" class="screen active">
+    <div class="title-card">
+      <h1>🌍 GeoQuest</h1>
+      <p class="subtitle">Test your world geography knowledge!</p>
+      <p class="description">
+        A city name will appear at the top of the screen.<br>
+        Click as close as you can to it on the map.<br>
+        The closer you click, the more points you score!
+      </p>
+      <div class="settings">
+        <label>
+          Rounds:
+          <select id="rounds-select">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
+          </select>
+        </label>
+        <label>
+          Difficulty:
+          <select id="difficulty-select">
+            <option value="easy">Easy (well-known cities)</option>
+            <option value="medium" selected>Medium (mix of cities)</option>
+            <option value="hard">Hard (includes smaller cities)</option>
+          </select>
+        </label>
+      </div>
+      <button id="btn-start" class="btn btn-primary">Start Game</button>
+    </div>
+  </div>
+
+  <!-- ===== GAME SCREEN ===== -->
+  <div id="screen-game" class="screen">
+
+    <!-- Top HUD -->
+    <div id="hud">
+      <div class="hud-left">
+        <span class="hud-label">Round</span>
+        <span id="hud-round">1 / 10</span>
+      </div>
+      <div class="hud-center">
+        <div id="prompt-box">
+          <span class="prompt-label">Find:</span>
+          <span id="prompt-city">London</span>
+        </div>
+      </div>
+      <div class="hud-right">
+        <span class="hud-label">Score</span>
+        <span id="hud-score">0</span>
+      </div>
+    </div>
+
+    <!-- Timer bar -->
+    <div id="timer-container">
+      <div id="timer-bar"></div>
+    </div>
+
+    <!-- Map -->
+    <div id="map"></div>
+
+    <!-- Round result overlay (shown after each guess) -->
+    <div id="round-result" class="hidden">
+      <div id="result-card">
+        <div id="result-icon"></div>
+        <h2 id="result-title"></h2>
+        <p id="result-distance"></p>
+        <p id="result-points"></p>
+        <button id="btn-next" class="btn btn-primary">Next Round →</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== END SCREEN ===== -->
+  <div id="screen-end" class="screen">
+    <div class="end-card">
+      <h1>Game Over!</h1>
+      <div id="end-trophy"></div>
+      <p id="end-score-label">Your final score</p>
+      <div id="end-score"></div>
+      <div id="end-max-score"></div>
+      <div id="end-grade"></div>
+
+      <table id="results-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>City</th>
+            <th>Distance</th>
+            <th>Points</th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+
+      <button id="btn-play-again" class="btn btn-primary">Play Again</button>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+// =========================================
+// locations.js – inlined
+// =========================================
+
+const LOCATIONS = [
+  // ---- EASY (major world capitals & iconic cities) ----
+  { name: "London",         lat:  51.5074, lng:  -0.1278, difficulty: "easy" },
+  { name: "Paris",          lat:  48.8566, lng:   2.3522, difficulty: "easy" },
+  { name: "New York",       lat:  40.7128, lng: -74.0060, difficulty: "easy" },
+  { name: "Tokyo",          lat:  35.6762, lng: 139.6503, difficulty: "easy" },
+  { name: "Sydney",         lat: -33.8688, lng: 151.2093, difficulty: "easy" },
+  { name: "Moscow",         lat:  55.7558, lng:  37.6173, difficulty: "easy" },
+  { name: "Beijing",        lat:  39.9042, lng: 116.4074, difficulty: "easy" },
+  { name: "Cairo",          lat:  30.0444, lng:  31.2357, difficulty: "easy" },
+  { name: "Rio de Janeiro", lat: -22.9068, lng: -43.1729, difficulty: "easy" },
+  { name: "Los Angeles",    lat:  34.0522, lng:-118.2437, difficulty: "easy" },
+  { name: "Berlin",         lat:  52.5200, lng:  13.4050, difficulty: "easy" },
+  { name: "Rome",           lat:  41.9028, lng:  12.4964, difficulty: "easy" },
+  { name: "Madrid",         lat:  40.4168, lng:  -3.7038, difficulty: "easy" },
+  { name: "Toronto",        lat:  43.6532, lng: -79.3832, difficulty: "easy" },
+  { name: "Dubai",          lat:  25.2048, lng:  55.2708, difficulty: "easy" },
+  { name: "Singapore",      lat:   1.3521, lng: 103.8198, difficulty: "easy" },
+  { name: "Mumbai",         lat:  19.0760, lng:  72.8777, difficulty: "easy" },
+  { name: "Mexico City",    lat:  19.4326, lng: -99.1332, difficulty: "easy" },
+  { name: "Buenos Aires",   lat: -34.6037, lng: -58.3816, difficulty: "easy" },
+  { name: "Cape Town",      lat: -33.9249, lng:  18.4241, difficulty: "easy" },
+  { name: "Bangkok",        lat:  13.7563, lng: 100.5018, difficulty: "easy" },
+  { name: "Seoul",          lat:  37.5665, lng: 126.9780, difficulty: "easy" },
+  { name: "Amsterdam",      lat:  52.3676, lng:   4.9041, difficulty: "easy" },
+  { name: "Chicago",        lat:  41.8781, lng: -87.6298, difficulty: "easy" },
+  { name: "Istanbul",       lat:  41.0082, lng:  28.9784, difficulty: "easy" },
+
+  // ---- MEDIUM (capitals + well-known regional cities) ----
+  { name: "Vienna",         lat:  48.2082, lng:  16.3738, difficulty: "medium" },
+  { name: "Warsaw",         lat:  52.2297, lng:  21.0122, difficulty: "medium" },
+  { name: "Stockholm",      lat:  59.3293, lng:  18.0686, difficulty: "medium" },
+  { name: "Oslo",           lat:  59.9139, lng:  10.7522, difficulty: "medium" },
+  { name: "Copenhagen",     lat:  55.6761, lng:  12.5683, difficulty: "medium" },
+  { name: "Lisbon",         lat:  38.7223, lng:  -9.1393, difficulty: "medium" },
+  { name: "Athens",         lat:  37.9838, lng:  23.7275, difficulty: "medium" },
+  { name: "Nairobi",        lat:  -1.2921, lng:  36.8219, difficulty: "medium" },
+  { name: "Lagos",          lat:   6.5244, lng:   3.3792, difficulty: "medium" },
+  { name: "Johannesburg",   lat: -26.2041, lng:  28.0473, difficulty: "medium" },
+  { name: "Casablanca",     lat:  33.5731, lng:  -7.5898, difficulty: "medium" },
+  { name: "Tehran",         lat:  35.6892, lng:  51.3890, difficulty: "medium" },
+  { name: "Karachi",        lat:  24.8607, lng:  67.0011, difficulty: "medium" },
+  { name: "Dhaka",          lat:  23.8103, lng:  90.4125, difficulty: "medium" },
+  { name: "Jakarta",        lat:  -6.2088, lng: 106.8456, difficulty: "medium" },
+  { name: "Manila",         lat:  14.5995, lng: 120.9842, difficulty: "medium" },
+  { name: "Kuala Lumpur",   lat:   3.1390, lng: 101.6869, difficulty: "medium" },
+  { name: "Ho Chi Minh City", lat: 10.8231, lng: 106.6297, difficulty: "medium" },
+  { name: "Colombo",        lat:   6.9271, lng:  79.8612, difficulty: "medium" },
+  { name: "Riyadh",         lat:  24.7136, lng:  46.6753, difficulty: "medium" },
+  { name: "Ankara",         lat:  39.9334, lng:  32.8597, difficulty: "medium" },
+  { name: "Kyiv",           lat:  50.4501, lng:  30.5234, difficulty: "medium" },
+  { name: "Bucharest",      lat:  44.4268, lng:  26.1025, difficulty: "medium" },
+  { name: "Budapest",       lat:  47.4979, lng:  19.0402, difficulty: "medium" },
+  { name: "Prague",         lat:  50.0755, lng:  14.4378, difficulty: "medium" },
+  { name: "Brussels",       lat:  50.8503, lng:   4.3517, difficulty: "medium" },
+  { name: "Zurich",         lat:  47.3769, lng:   8.5417, difficulty: "medium" },
+  { name: "Helsinki",       lat:  60.1699, lng:  24.9384, difficulty: "medium" },
+  { name: "Dublin",         lat:  53.3498, lng:  -6.2603, difficulty: "medium" },
+  { name: "Havana",         lat:  23.1136, lng: -82.3666, difficulty: "medium" },
+  { name: "Bogota",         lat:   4.7110, lng: -74.0721, difficulty: "medium" },
+  { name: "Lima",           lat: -12.0464, lng: -77.0428, difficulty: "medium" },
+  { name: "Santiago",       lat: -33.4489, lng: -70.6693, difficulty: "medium" },
+  { name: "Caracas",        lat:  10.4806, lng: -66.9036, difficulty: "medium" },
+  { name: "Addis Ababa",    lat:   9.0320, lng:  38.7469, difficulty: "medium" },
+  { name: "Accra",          lat:   5.5600, lng:  -0.2057, difficulty: "medium" },
+  { name: "Algiers",        lat:  36.7372, lng:   3.0865, difficulty: "medium" },
+  { name: "Kabul",          lat:  34.5553, lng:  69.2075, difficulty: "medium" },
+  { name: "Islamabad",      lat:  33.6844, lng:  73.0479, difficulty: "medium" },
+  { name: "New Delhi",      lat:  28.6139, lng:  77.2090, difficulty: "medium" },
+  { name: "Kathmandu",      lat:  27.7172, lng:  85.3240, difficulty: "medium" },
+  { name: "Ulaanbaatar",    lat:  47.8864, lng: 106.9057, difficulty: "medium" },
+  { name: "Pyongyang",      lat:  39.0392, lng: 125.7625, difficulty: "medium" },
+  { name: "Taipei",         lat:  25.0330, lng: 121.5654, difficulty: "medium" },
+  { name: "Melbourne",      lat: -37.8136, lng: 144.9631, difficulty: "medium" },
+  { name: "Auckland",       lat: -36.8509, lng: 174.7645, difficulty: "medium" },
+
+  // ---- HARD (less prominent cities, harder to pinpoint) ----
+  { name: "Reykjavik",      lat:  64.1265, lng: -21.8174, difficulty: "hard" },
+  { name: "Tallinn",        lat:  59.4370, lng:  24.7536, difficulty: "hard" },
+  { name: "Riga",           lat:  56.9460, lng:  24.1059, difficulty: "hard" },
+  { name: "Vilnius",        lat:  54.6872, lng:  25.2797, difficulty: "hard" },
+  { name: "Minsk",          lat:  53.9045, lng:  27.5615, difficulty: "hard" },
+  { name: "Chisinau",       lat:  47.0105, lng:  28.8638, difficulty: "hard" },
+  { name: "Tbilisi",        lat:  41.6938, lng:  44.8015, difficulty: "hard" },
+  { name: "Yerevan",        lat:  40.1872, lng:  44.5152, difficulty: "hard" },
+  { name: "Baku",           lat:  40.4093, lng:  49.8671, difficulty: "hard" },
+  { name: "Tashkent",       lat:  41.2995, lng:  69.2401, difficulty: "hard" },
+  { name: "Almaty",         lat:  43.2220, lng:  76.8512, difficulty: "hard" },
+  { name: "Bishkek",        lat:  42.8746, lng:  74.5698, difficulty: "hard" },
+  { name: "Dushanbe",       lat:  38.5598, lng:  68.7870, difficulty: "hard" },
+  { name: "Ashgabat",       lat:  37.9601, lng:  58.3261, difficulty: "hard" },
+  { name: "Muscat",         lat:  23.5880, lng:  58.3829, difficulty: "hard" },
+  { name: "Manama",         lat:  26.2154, lng:  50.5832, difficulty: "hard" },
+  { name: "Doha",           lat:  25.2854, lng:  51.5310, difficulty: "hard" },
+  { name: "Sanaa",          lat:  15.3694, lng:  44.1910, difficulty: "hard" },
+  { name: "Mogadishu",      lat:   2.0469, lng:  45.3182, difficulty: "hard" },
+  { name: "Khartoum",       lat:  15.5007, lng:  32.5599, difficulty: "hard" },
+  { name: "Luanda",         lat:  -8.8390, lng:  13.2894, difficulty: "hard" },
+  { name: "Lusaka",         lat: -15.4167, lng:  28.2833, difficulty: "hard" },
+  { name: "Harare",         lat: -17.8252, lng:  31.0335, difficulty: "hard" },
+  { name: "Maputo",         lat: -25.9692, lng:  32.5732, difficulty: "hard" },
+  { name: "Antananarivo",   lat: -18.9137, lng:  47.5361, difficulty: "hard" },
+  { name: "Bamako",         lat:  12.6392, lng:  -8.0029, difficulty: "hard" },
+  { name: "Dakar",          lat:  14.7167, lng: -17.4677, difficulty: "hard" },
+  { name: "Abuja",          lat:   9.0765, lng:   7.3986, difficulty: "hard" },
+  { name: "Kinshasa",       lat:  -4.3217, lng:  15.3222, difficulty: "hard" },
+  { name: "Libreville",     lat:   0.3901, lng:   9.4544, difficulty: "hard" },
+  { name: "Niamey",         lat:  13.5137, lng:   2.1098, difficulty: "hard" },
+  { name: "Ouagadougou",    lat:  12.3714, lng:  -1.5197, difficulty: "hard" },
+  { name: "Ndjamena",       lat:  12.1348, lng:  15.0557, difficulty: "hard" },
+  { name: "Port Moresby",   lat:  -9.4438, lng: 147.1803, difficulty: "hard" },
+  { name: "Suva",           lat: -18.1416, lng: 178.4419, difficulty: "hard" },
+  { name: "Honiara",        lat:  -9.4456, lng: 160.0000, difficulty: "hard" },
+  { name: "Vientiane",      lat:  17.9757, lng: 102.6331, difficulty: "hard" },
+  { name: "Phnom Penh",     lat:  11.5564, lng: 104.9282, difficulty: "hard" },
+  { name: "Yangon",         lat:  16.8661, lng:  96.1951, difficulty: "hard" },
+  { name: "Quito",          lat:  -0.1807, lng: -78.4678, difficulty: "hard" },
+  { name: "Asuncion",       lat: -25.2867, lng: -57.6470, difficulty: "hard" },
+  { name: "Montevideo",     lat: -34.9011, lng: -56.1645, difficulty: "hard" },
+  { name: "Georgetown",     lat:   6.8013, lng: -58.1551, difficulty: "hard" },
+  { name: "Paramaribo",     lat:   5.8664, lng: -55.1668, difficulty: "hard" },
+  { name: "Cayenne",        lat:   4.9224, lng: -52.3135, difficulty: "hard" },
+  { name: "La Paz",         lat: -16.5000, lng: -68.1193, difficulty: "hard" },
+];
+
+function getLocationsByDifficulty(difficulty) {
+  if (difficulty === "easy")   return LOCATIONS.filter(l => l.difficulty === "easy");
+  if (difficulty === "medium") return LOCATIONS.filter(l => l.difficulty !== "hard");
+  return LOCATIONS;
+}
+
+
+// =========================================
+// game.js – inlined
+// =========================================
+
+const ROUND_TIME_SEC  = 30;
+const MAX_SCORE_ROUND = 5000;
+const MAX_DIST_KM     = 5000;
+
+const state = {
+  map:           null,
+  totalRounds:   10,
+  difficulty:    "medium",
+  currentRound:  0,
+  score:         0,
+  questions:     [],
+  roundResults:  [],
+  timerInterval: null,
+  timeLeft:      ROUND_TIME_SEC,
+  guessMarker:   null,
+  targetMarker:  null,
+  guessLine:     null,
+  awaitingNext:  false,
+};
+
+const $ = id => document.getElementById(id);
+
+const el = {
+  screenTitle:    $("screen-title"),
+  screenGame:     $("screen-game"),
+  screenEnd:      $("screen-end"),
+  roundsSelect:   $("rounds-select"),
+  diffSelect:     $("difficulty-select"),
+  btnStart:       $("btn-start"),
+  hudRound:       $("hud-round"),
+  hudScore:       $("hud-score"),
+  promptCity:     $("prompt-city"),
+  timerBar:       $("timer-bar"),
+  roundResult:    $("round-result"),
+  resultIcon:     $("result-icon"),
+  resultTitle:    $("result-title"),
+  resultDistance: $("result-distance"),
+  resultPoints:   $("result-points"),
+  btnNext:        $("btn-next"),
+  endTrophy:      $("end-trophy"),
+  endScore:       $("end-score"),
+  endMaxScore:    $("end-max-score"),
+  endGrade:       $("end-grade"),
+  resultsBody:    $("results-body"),
+  btnPlayAgain:   $("btn-play-again"),
+};
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+          + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function pointsFromDistance(km) {
+  if (km >= MAX_DIST_KM) return 0;
+  const ratio = 1 - (km / MAX_DIST_KM);
+  return Math.round(MAX_SCORE_ROUND * ratio * ratio);
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function showScreen(name) {
+  ["title", "game", "end"].forEach(n => {
+    document.getElementById(`screen-${n}`).classList.toggle("active", n === name);
+  });
+}
+
+function formatKm(km) {
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${Math.round(km).toLocaleString()} km`;
+}
+
+function initMap() {
+  if (state.map) {
+    state.map.remove();
+    state.map = null;
+  }
+
+  state.map = L.map("map", {
+    center:             [20, 10],
+    zoom:               2,
+    minZoom:            2,
+    maxZoom:            8,
+    zoomSnap:           0.5,
+    worldCopyJump:      false,
+    maxBounds:          [[-90, -200], [90, 200]],
+    maxBoundsViscosity: 1.0,
+  });
+
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains:  "abcd",
+    maxZoom:     20,
+  }).addTo(state.map);
+
+  state.map.on("click", onMapClick);
+}
+
+function startGame() {
+  state.totalRounds  = parseInt(el.roundsSelect.value, 10);
+  state.difficulty   = el.diffSelect.value;
+  state.currentRound = 0;
+  state.score        = 0;
+  state.roundResults = [];
+  state.awaitingNext = false;
+
+  const pool = getLocationsByDifficulty(state.difficulty);
+  state.questions = shuffle([...pool]).slice(0, state.totalRounds);
+
+  showScreen("game");
+  initMap();
+  // Give the browser time to paint the flex layout before Leaflet measures
+  // the container – prevents the blank/grey map bug when opening via file://
+  setTimeout(() => {
+    state.map.invalidateSize();
+    startRound();
+  }, 150);
+}
+
+function startRound() {
+  state.awaitingNext = false;
+  clearMapOverlays();
+  el.roundResult.classList.add("hidden");
+
+  const location = state.questions[state.currentRound];
+  el.promptCity.textContent = location.name;
+  el.hudRound.textContent   = `${state.currentRound + 1} / ${state.totalRounds}`;
+  el.hudScore.textContent   = state.score.toLocaleString();
+
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(state.timerInterval);
+  state.timeLeft = ROUND_TIME_SEC;
+  updateTimerBar();
+
+  state.timerInterval = setInterval(() => {
+    state.timeLeft -= 0.1;
+    updateTimerBar();
+    if (state.timeLeft <= 0) {
+      clearInterval(state.timerInterval);
+      handleTimesUp();
+    }
+  }, 100);
+}
+
+function updateTimerBar() {
+  const pct = Math.max(0, state.timeLeft / ROUND_TIME_SEC) * 100;
+  el.timerBar.style.width = `${pct}%`;
+  el.timerBar.classList.remove("warning", "danger");
+  if (pct < 20) el.timerBar.classList.add("danger");
+  else if (pct < 40) el.timerBar.classList.add("warning");
+}
+
+function handleTimesUp() {
+  clearInterval(state.timerInterval);
+  const location = state.questions[state.currentRound];
+  showRoundResult(null, null, location, Infinity);
+}
+
+function onMapClick(e) {
+  if (state.awaitingNext) return;
+  clearInterval(state.timerInterval);
+
+  const { lat, lng } = e.latlng;
+  const location      = state.questions[state.currentRound];
+  const distKm        = haversineKm(lat, lng, location.lat, location.lng);
+
+  state.guessMarker = L.circleMarker([lat, lng], {
+    radius: 8, color: "#ffffff", weight: 3, fillColor: "#4e9af1", fillOpacity: 1,
+  }).addTo(state.map).bindPopup("Your guess");
+
+  showRoundResult(lat, lng, location, distKm);
+}
+
+function showRoundResult(guessLat, guessLng, location, distKm) {
+  state.awaitingNext = true;
+
+  const points = isFinite(distKm) ? pointsFromDistance(distKm) : 0;
+  state.score += points;
+  state.roundResults.push({ name: location.name, distanceKm: distKm, points });
+
+  state.targetMarker = L.circleMarker([location.lat, location.lng], {
+    radius: 10, color: "#ffffff", weight: 3, fillColor: "#2ecc71", fillOpacity: 1,
+  }).addTo(state.map).bindPopup(`📍 ${location.name}`).openPopup();
+
+  if (guessLat !== null && isFinite(distKm)) {
+    state.guessLine = L.polyline(
+      [[guessLat, guessLng], [location.lat, location.lng]],
+      { color: "#f39c12", weight: 2, dashArray: "6 4", opacity: 0.8 }
+    ).addTo(state.map);
+
+    const bounds = L.latLngBounds([guessLat, guessLng], [location.lat, location.lng]).pad(0.25);
+    state.map.fitBounds(bounds, { animate: true, duration: 0.5 });
+  } else {
+    state.map.setView([location.lat, location.lng], 4, { animate: true });
+  }
+
+  if (!isFinite(distKm)) {
+    el.resultIcon.textContent     = "⏰";
+    el.resultTitle.textContent    = "Time's Up!";
+    el.resultDistance.textContent = `The answer was: ${location.name}`;
+  } else {
+    const icon = points >= 4000 ? "🎯" : points >= 2000 ? "👍" : points >= 500 ? "🙂" : "😬";
+    el.resultIcon.textContent     = icon;
+    el.resultTitle.textContent    = points >= 4000 ? "Excellent!" : points >= 2000 ? "Good job!" : points >= 500 ? "Not bad" : "Off the mark";
+    el.resultDistance.textContent = `Distance: ${formatKm(distKm)} from ${location.name}`;
+  }
+
+  el.resultPoints.textContent = `+${points.toLocaleString()} points`;
+  el.resultPoints.style.color = points >= 3000 ? "var(--success)"
+                              : points >= 1000 ? "var(--warning)"
+                              : "var(--danger)";
+
+  el.hudScore.textContent = state.score.toLocaleString();
+  el.roundResult.classList.remove("hidden");
+}
+
+function nextRound() {
+  state.currentRound++;
+  if (state.currentRound >= state.totalRounds) {
+    endGame();
+  } else {
+    startRound();
+  }
+}
+
+function clearMapOverlays() {
+  if (state.guessMarker)  { state.map.removeLayer(state.guessMarker);  state.guessMarker  = null; }
+  if (state.targetMarker) { state.map.removeLayer(state.targetMarker); state.targetMarker = null; }
+  if (state.guessLine)    { state.map.removeLayer(state.guessLine);    state.guessLine    = null; }
+}
+
+function endGame() {
+  clearInterval(state.timerInterval);
+  showScreen("end");
+
+  const maxPossible = state.totalRounds * MAX_SCORE_ROUND;
+  const pct         = state.score / maxPossible;
+
+  const trophy = pct >= 0.9 ? "🏆" : pct >= 0.7 ? "🥇" : pct >= 0.5 ? "🥈" : pct >= 0.3 ? "🥉" : "🌍";
+  const grade  = pct >= 0.9 ? "Geography Master!"
+               : pct >= 0.7 ? "World Traveller"
+               : pct >= 0.5 ? "Decent Navigator"
+               : pct >= 0.3 ? "Getting There"
+               : "Keep Exploring!";
+
+  el.endTrophy.textContent   = trophy;
+  el.endScore.textContent    = state.score.toLocaleString();
+  el.endMaxScore.textContent = `out of ${maxPossible.toLocaleString()}`;
+  el.endGrade.textContent    = grade;
+
+  el.resultsBody.innerHTML = state.roundResults.map((r, i) => {
+    const distText = isFinite(r.distanceKm) ? formatKm(r.distanceKm) : "–";
+    const ptClass  = r.points >= 3000 ? "points-high" : r.points >= 1000 ? "points-mid" : "points-low";
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${r.name}</td>
+      <td>${distText}</td>
+      <td class="points-cell ${ptClass}">${r.points.toLocaleString()}</td>
+    </tr>`;
+  }).join("");
+}
+
+el.btnStart.addEventListener("click", startGame);
+el.btnNext.addEventListener("click", nextRound);
+el.btnPlayAgain.addEventListener("click", () => showScreen("title"));
+  </script>
+</body>
+</html>
