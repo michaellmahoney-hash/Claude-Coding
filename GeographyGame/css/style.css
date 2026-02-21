@@ -51,6 +51,9 @@ body {
 }
 #screen-game.active {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
 }
 
 /* ---- Title Screen ---- */
