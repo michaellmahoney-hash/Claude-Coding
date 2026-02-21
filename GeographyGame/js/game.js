@@ -143,7 +143,12 @@ function startGame() {
 
   showScreen("game");
   initMap();
-  startRound();
+  // Give the browser one frame to render the flex layout before Leaflet
+  // measures the map container – prevents the "grey/black tiles" bug.
+  setTimeout(() => {
+    state.map.invalidateSize();
+    startRound();
+  }, 50);
 }
 
 function startRound() {
