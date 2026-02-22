@@ -395,3 +395,32 @@ body {
 .leaflet-popup-tip {
   background: var(--surface2);
 }
+
+/* ---- Title tips & footer nav ---- */
+.title-tips {
+  margin-top: 20px;
+  padding: 12px 16px;
+  background: var(--surface2);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  text-align: left;
+}
+.title-tips strong { color: var(--text); }
+
+.title-footer {
+  margin-top: 16px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+.title-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.title-footer a:hover { text-decoration: underline; }
+.title-footer .sep { color: var(--border); }
